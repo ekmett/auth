@@ -12,15 +12,20 @@
 {-# language TypeFamilies #-}
 {-# language TypeOperators #-}
 
-module Auth where
+module Control.Monad.Auth
+  ( MonadAuth(..)
+  , Prover(..)
+  , Verifier(..)
+  , Certificate
+  , trust
+  , verify
+  , trustButVerify
+  , Auth(..)
+  ) where
 
 import Control.Applicative
 import Control.Monad (ap)
 import Control.Monad.Trans.Class
-import Crypto.Hash.SHA1
-import Data.ByteString.Lazy.UTF8 as UTF8
-import Data.ByteString.Base16 as Base16
-import Text.Read hiding (lift)
 import Control.Monad.Trans.State.Lazy as Lazy
 import Control.Monad.Trans.State.Strict as Strict
 import Control.Monad.Trans.Writer.Lazy as Lazy
@@ -28,6 +33,10 @@ import Control.Monad.Trans.Writer.Strict as Strict
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.RWS.Lazy as Lazy
 import Control.Monad.Trans.RWS.Strict as Strict
+import Crypto.Hash.SHA1
+import Data.ByteString.Lazy.UTF8 as UTF8
+import Data.ByteString.Base16 as Base16
+import Text.Read hiding (lift)
 import Prelude hiding (lookup)
 
 type Hash = String
@@ -35,12 +44,10 @@ type Hash = String
 sha1 :: String -> Hash
 sha1 = show . Base16.encode . hashlazy . UTF8.fromString
 
-type Evident a = (Show a, Read a)
-
 class Monad m => MonadAuth m where
   data Auth m :: * -> *
-  auth  :: Evident a => a -> Auth m a
-  unauth :: Evident a => Auth m a -> m a
+  auth  :: Show a => a -> Auth m a
+  unauth :: (Show a, Read a) => Auth m a -> m a
 
   showsPrecAuth :: Int -> Auth m a -> ShowS
   readPrecAuth :: ReadPrec (Auth m a) -- lies!
@@ -155,6 +162,10 @@ trustButVerify m = (a, b)
     (a, c) = trust m
     Just b = verify m c
 
+-- example
+
+{-
+
 type Path = [Bool]
 
 data T a b = Tip a | Bin b b
@@ -163,18 +174,20 @@ data T a b = Tip a | Bin b b
 newtype Tree m a = Tree { runTree :: Auth m (T a (Tree m a)) }
   deriving (Read, Show)
 
-tip :: (MonadAuth m, Evident a) => a -> Tree m a
+tip :: (MonadAuth m, Show a) => a -> Tree m a
 tip a = Tree (auth (Tip a))
 
-bin :: (MonadAuth m, Evident a) => Tree m a -> Tree m a -> Tree m a
+bin :: (MonadAuth m, Show a) => Tree m a -> Tree m a -> Tree m a
 bin l r = Tree (auth (Bin l r))
 
-lookup :: (MonadAuth m, Evident a) => Path -> Tree m a -> m (Maybe a)
+lookup :: (MonadAuth m, Show a, Read a) => Path -> Tree m a -> m (Maybe a)
 lookup p (Tree t) = unauth t >>= \tree -> case (p, tree) of
   ([], Tip a) -> return $ Just a
   (False:q, Bin l _) -> lookup q l
   (True:q, Bin _ r) -> lookup q r
   (_,_) -> return Nothing
 
-update :: (MonadAuth m, Evident a) => Path -> a -> Tree m a -> m (Maybe (Tree m a))
-update p v (Tree t) = 
+-}
+
+-- update :: (MonadAuth m, Show a, Read a) => Path -> a -> Tree m a -> m (Maybe (Tree m a))
+-- update p v (Tree t) = 

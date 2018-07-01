@@ -19,26 +19,13 @@ source-repository head
   type: git
   location: git://github.com/ekmett/auth.git
 
-library common
-  default-language: Haskell2010
-  hs-source-dirs: common
-  build-depends: base, utf8-string, cryptohash-sha1
-  exposed-modules: Hash
-
-library prover
-  default-language: Haskell2010
-  build-depends: base, common, transformers, constraints
-  hs-source-dirs: prover
-  exposed-modules: Prover
-
-library verifier
-  default-language: Haskell2010
-  build-depends: base, common, transformers, constraints
-  hs-source-dirs: verifier
-  exposed-modules: Verifier
-
 library
   default-language: Haskell2010
-  build-depends: base, utf8-string, cryptohash-sha1, base16-bytestring, transformers, constraints
-  exposed-modules: Auth
+  build-depends:
+    base >= 4.11 && < 5,
+    base16-bytestring >= 0.1.1.6 && < 0.2,
+    cryptohash-sha1 >= 0.11.100.1 && < 0.12,
+    transformers >= 0.5 && < 0.6,
+    utf8-string >= 1.0 && < 1.1
+  exposed-modules: Control.Monad.Auth
   hs-source-dirs: src
