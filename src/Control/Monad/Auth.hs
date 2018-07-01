@@ -1,6 +1,5 @@
 {-# language AllowAmbiguousTypes #-}
 {-# language ConstraintKinds #-}
-{-# language DefaultSignatures #-}
 {-# language DeriveFunctor #-}
 {-# language FlexibleContexts #-}
 {-# language KindSignatures #-}
@@ -8,9 +7,26 @@
 {-# language RankNTypes #-}
 {-# language ScopedTypeVariables #-}
 {-# language TupleSections #-}
-{-# language TypeApplications #-}
 {-# language TypeFamilies #-}
 {-# language TypeOperators #-}
+
+-----------------------------------------------------------------------------
+-- |
+-- Copyright   :  (C) 2018 Edward Kmett
+-- License     :  BSD-style (see the file LICENSE)
+--
+-- Maintainer  :  Edward Kmett <ekmett@gmail.com>
+-- Stability   :  experimental
+-- Portability :  non-portable
+--
+-- Authenticated computations as a library.
+--
+-- This code is based on the semantics from
+-- <http://www.cs.umd.edu/~mwh/papers/gpads.pdf Authenticated Data Structures, Generically>
+-- by Miller, Hicks, Katz and Shi as implemented by Bob Atkey in
+-- <https://bentnib.org/posts/2016-04-12-authenticated-data-structures-as-a-library.html Authenticated Data Structures, as a Library, for Free!>
+--
+----------------------------------------------------------------------------
 
 module Control.Monad.Auth
   ( MonadAuth(..)
@@ -21,6 +37,7 @@ module Control.Monad.Auth
   , verify
   , trustButVerify
   , Auth(..)
+  -- $example
   ) where
 
 import Control.Applicative
@@ -37,7 +54,6 @@ import Crypto.Hash.SHA1
 import Data.ByteString.Lazy.UTF8 as UTF8
 import Data.ByteString.Base16 as Base16
 import Text.Read hiding (lift)
-import Prelude hiding (lookup)
 
 type Hash = String
 
@@ -119,7 +135,7 @@ instance Applicative Prover where
 instance Monad Prover where
   Prover m >>= f = Prover $ \s -> case m s of
     (a, s') -> runProver (f a) s'
-  
+
 instance MonadAuth Prover where
   data Auth Prover a = Proof a Hash
   auth a = Proof a (sha1 (show a))
@@ -138,7 +154,7 @@ instance Monad Verifier where
   Verifier m >>= f = Verifier $ \s -> do
     (a, s') <- m s
     runVerifier (f a) s'
-    
+
 instance MonadAuth Verifier where
   newtype Auth Verifier a = Verification Hash
   auth = Verification . sha1 . show
@@ -155,17 +171,19 @@ verify :: (forall m. MonadAuth m => m a) -> Certificate -> Maybe a
 verify m c = do
   (a, []) <- runVerifier m c
   pure a
-  
+
 trustButVerify :: (forall m. MonadAuth m => m a) -> (a, a)
-trustButVerify m = (a, b)
-  where 
-    (a, c) = trust m
-    Just b = verify m c
+trustButVerify m = (a, b) where
+  (a, c) = trust m
+  Just b = verify m c
 
 -- example
 
-{-
+{- $example
 
+An example of usage
+
+@
 type Path = [Bool]
 
 data T a b = Tip a | Bin b b
@@ -186,8 +204,7 @@ lookup p (Tree t) = unauth t >>= \tree -> case (p, tree) of
   (False:q, Bin l _) -> lookup q l
   (True:q, Bin _ r) -> lookup q r
   (_,_) -> return Nothing
+@
 
 -}
 
--- update :: (MonadAuth m, Show a, Read a) => Path -> a -> Tree m a -> m (Maybe (Tree m a))
--- update p v (Tree t) = 
