@@ -14,6 +14,7 @@
 
 module Auth where
 
+import Control.Applicative
 import Control.Monad (ap)
 import Control.Monad.Trans.Class
 import Crypto.Hash.SHA1
@@ -34,17 +35,11 @@ type Hash = String
 sha1 :: String -> Hash
 sha1 = show . Base16.encode . hashlazy . UTF8.fromString
 
--- class ( forall a. Evident t (t a) , forall a. (Show a, Read a) => Evident t a) => Authentic t where
-class Authentic t where
- type Evident t a :: Constraint
- type Evident t a = (Show a, Read a)
- ev :: (Show a, Read a) :- Evident t a
- eauth :: Dict (Evident t (t a))
- auth :: Evident t a => a -> t a
+type Evident a = (Show a, Read a)
 
-authv :: forall t a. (Authentic t, Read a, Show a) => a -> t a
-authv a = case ev @t @a of
-  Sub Dict -> auth a
+class Authentic t where
+ auth :: Evident a => a -> t a
+ eauth :: Dict (Show (t a), Read (t a))
 
 authauth :: forall t a. Authentic t => t a -> t (t a)
 authauth a = case eauth @t @a of
@@ -52,18 +47,9 @@ authauth a = case eauth @t @a of
 
 class (Monad m, Authentic (Auth m)) => MonadAuth m where
   type Auth m :: * -> *
-  unauth :: Evident (Auth m) a => Auth m a -> m a
-  default unauth :: (MonadTrans s, MonadAuth n, m ~ s n, Auth m ~ Auth n, Evident (Auth m) a) => Auth m a -> m a
+  unauth :: Evident a => Auth m a -> m a
+  default unauth :: (MonadTrans s, MonadAuth n, m ~ s n, Auth m ~ Auth n, Evident a) => Auth m a -> m a
   unauth = lift . unauth
-
-unauthv :: forall m a. (MonadAuth m, Read a, Show a) => Auth m a -> m a
-unauthv a = case ev @(Auth m) @a of
-  Sub Dict -> unauth a
-
-unauthauth :: forall m a. MonadAuth m => Auth m (Auth m a) -> m (Auth m a)
-unauthauth a = case eauth @(Auth m) @a of
-  Dict -> unauth a
-
 
 instance MonadAuth m => MonadAuth (Lazy.StateT s m) where
   type Auth (Lazy.StateT s m) = Auth m
@@ -98,11 +84,16 @@ data Proof a = Proof a Hash
 instance Show (Proof a) where
   showsPrec d (Proof _ h) = showsPrec d h
 
+instance Read (Proof a) where
+  readPrec = empty
+
 instance Authentic Proof where
-  type Evident Proof a = Show a
   auth a = Proof a (sha1 (show a))
-  ev = Sub Dict
   eauth = Dict
+
+unauthauth :: forall m a. MonadAuth m => Auth m (Auth m a) -> m (Auth m a)
+unauthauth a = case eauth @(Auth m) @a of
+  Dict -> unauth a
 
 newtype Prover a = Prover { runProver :: Certificate -> (a, Certificate ) } -- reversed cert
   deriving Functor
@@ -128,10 +119,8 @@ instance Read (Verification a) where
   readPrec = Verification <$> readPrec
 
 instance Authentic Verification where
-  type Evident Verification a = (Show a, Read a)
-  ev = Sub Dict
-  eauth = Dict
   auth = Verification . sha1 . show
+  eauth = Dict
 
 newtype Verifier a = Verifier { runVerifier :: Certificate -> Maybe (a, Certificate) }
   deriving Functor
@@ -150,7 +139,6 @@ instance MonadAuth Verifier where
   unauth (Verification h) = Verifier $ \case
     p:ps | sha1 p == h -> (,ps) <$> readMaybe p
     _ -> Nothing
-
 
 trust :: (forall m. MonadAuth m => m a) -> (a, Certificate)
 trust m = reverse <$> runProver m []
