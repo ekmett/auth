@@ -3,28 +3,32 @@
 {-# language MonoLocalBinds #-}
 {-# language GeneralizedNewtypeDeriving #-}
 {-# language FlexibleInstances #-}
+{-# language TupleSections #-}
 
 module Verifier where
 
 import Control.Monad.Trans.State
-import Data.Aeson
 import Hash
+import Text.Read
 
-newtype Auth a = Auth String
-  deriving (ToJSON, FromJSON)
+newtype Auth a = Auth Hash
 
-type M = StateT [Value] Maybe
+instance Show (Auth a) where
+  showsPrec d (Auth h) = showsPrec d h
 
-class (ToJSON a, FromJSON a) => Evident a
-instance (ToJSON a, FromJSON a) => Evident a
+instance Read (Auth a) where
+  readPrec = Auth <$> readPrec
+
+type M = StateT [String] Maybe
+
+class (Read a, Show a) => Evident a
+instance (Read a, Show a) => Evident a
 
 auth :: Evident a => a -> Auth a
-auth = Auth . sha1 . toJSON
+auth = Auth . sha1 . show
 
 unauth :: Evident a => Auth a -> M a
 unauth (Auth h) = StateT $ \case
-  p:ps | sha1 p == h -> case fromJSON p of
-    Error _ -> Nothing
-    Success a -> Just (a, ps)
+  p:ps | sha1 p == h -> (,ps) <$> readMaybe p
   _ -> Nothing
 

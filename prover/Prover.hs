@@ -2,28 +2,26 @@
 module Prover where
 
 import Data.Constraint
-import Data.Aeson
 import Control.Monad.Trans.Writer
 import Hash
 
-data Auth a = Auth a String
-  deriving Show
+data Auth a = Auth a Hash
 
-type M = Writer [Value]
+type M = Writer [String]
 
-type Evident = ToJSON
+type Evident = Show
 
-instance ToJSON (Auth a) where
-  toJSON (Auth _ h) = toJSON h
+instance Show (Auth a) where
+  showsPrec d (Auth _ h) = showsPrec d h
 
-ejson :: (ToJSON a, FromJSON a) :- Evident a
+ejson :: (Show a, Read a) :- Evident a
 ejson = Sub Dict
 
 eauth :: Dict (Evident (Auth a))
 eauth = Dict
 
 auth :: Evident a => a -> Auth a
-auth a = Auth a (sha1 (toJSON a))
+auth a = Auth a (sha1 (show a))
 
 unauth :: Evident a => Auth a -> M a
-unauth (Auth a _) = writer (a, [toJSON a])
+unauth (Auth a _) = writer (a, [show a])
