@@ -1,0 +1,36 @@
+cabal-version: 2.0
+name:          auth
+category:      Data Structures
+version:       0
+license:       BSD2
+license-file:  LICENSE
+author:        Edward A. Kmett
+maintainer:    Edward A. Kmett <ekmett@gmail.com>
+stability:     experimental
+homepage:      http://github.com/ekmett/auth/
+bug-reports:   http://github.com/ekmett/auth/issues
+copyright:     Copyright (C) 2018 Edward A. Kmett
+synopsis:      Authenticated data structures
+description:   Authenticated data structures.
+build-type:    Simple
+extra-source-files:
+
+source-repository head
+  type: git
+  location: git://github.com/ekmett/auth.git
+
+library common
+  hs-source-dirs: common
+  build-depends: aeson, base, cryptonite
+  exposed-modules: Hash
+
+library prover
+  build-depends: aeson, base, common
+  hs-source-dirs: prover
+  exposed-modules: Prover
+
+library verifier
+  build-depends: aeson, base, common
+  hs-source-dirs: verifier
+  exposed-modules: Verifier
+
