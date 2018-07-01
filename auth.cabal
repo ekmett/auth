@@ -21,16 +21,16 @@ source-repository head
 
 library common
   hs-source-dirs: common
-  build-depends: aeson, base, cryptonite
+  build-depends: aeson, base, cryptohash-sha1
   exposed-modules: Hash
 
 library prover
-  build-depends: aeson, base, common
+  build-depends: aeson, base, common, transformers, constraints
   hs-source-dirs: prover
   exposed-modules: Prover
 
 library verifier
-  build-depends: aeson, base, common
+  build-depends: aeson, base, common, transformers, constraints
   hs-source-dirs: verifier
   exposed-modules: Verifier
 

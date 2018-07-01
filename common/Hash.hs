@@ -1,7 +1,7 @@
 module Hash where
 
-import Crypto.Hash
+import Crypto.Hash.SHA1
 import Data.Aeson
 
 sha1 :: Value -> String
-sha1 v = show (hashlazy (encode v) :: Digest SHA1)
+sha1 v = show (hashlazy (encode v))
