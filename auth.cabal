@@ -11,9 +11,12 @@ homepage:      http://github.com/ekmett/auth/
 bug-reports:   http://github.com/ekmett/auth/issues
 copyright:     Copyright (C) 2018 Edward A. Kmett
 synopsis:      Authenticated data structures
-description:   Authenticated data structures.
+description:   Authenticated data structures as a library
 build-type:    Simple
 extra-source-files:
+  README.md
+  CHANGELOG.md
+  .gitignore
 
 source-repository head
   type: git
