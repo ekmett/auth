@@ -143,12 +143,14 @@ template<db DB>
 struct bin {
   sealed<DB, tree<DB>> left, right;
   bin() = default;
-  bin(DB& db, auto l, auto r)
-    : left(db.seal(tree<DB>{std::move(l)})),
-      right(db.seal(tree<DB>{std::move(r)})) {}
+  bin(DB& db, tree<DB> l, tree<DB> r)
+    : left(db.seal(std::move(l))), right(db.seal(std::move(r))) {}
   template<class Self, class Stream>
   void serialize(this Self& self, Stream& s) { s(self.left, self.right); }
 };
+
+template<db DB>
+bin(DB&, auto, auto) -> bin<DB>;
 
 enum class direction { left, right };
 using enum direction;
