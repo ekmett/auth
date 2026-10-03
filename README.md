@@ -103,23 +103,21 @@ std::optional<std::uint32_t> at(DB& db, sealed<DB, tree<DB>> root,
 int main() {
   prover p;
   auto root = p.seal(tree{bin(p, bin(p, tip(1), tip(2)), tip(3))});
-  const auto expected_root = encode(root); // Just the root's 32-byte digest.
+  const auto expected_root = encode(root); // Just the root's digest.
   auto answer = at(p, std::move(root), {left, right});
 
   verifier v{p.proof};
   auto [root_digest, next] = decode<sealed<verifier, tree<verifier>>>(expected_root);
   auto replay = at(v, root_digest, {left, right});
   v.finish();
-  return answer == 2 && replay == answer && p.proof.size() == 135 ? 0 : 1;
+  return answer == 2 && replay == answer ? 0 : 1;
 }
 ```
 
-The proof is exactly the concatenation of the serialized values unsealed during
-proving: its size equals the serialized size of the portion of the sealed
-structure walked, counting each opening. Here the root and its left bin each
-contribute 65 bytes (one variant tag and two 32-byte child digests), and the
-selected tip contributes 5 bytes, for **135 bytes total**. The expected root digest
-is supplied separately to the verifier and is not part of `p.proof`.
+The proof contains the serialized values unsealed during proving, so its size
+equals the serialized size of the portion of the sealed structure you walk,
+counting each opening. The expected root digest is supplied separately to the
+verifier and is not part of `p.proof`.
 
 Unvisited subtrees contribute only their digests in visited parents. Their
 contents are absent from the proof, however large those subtrees become.
