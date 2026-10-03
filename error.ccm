@@ -1,0 +1,20 @@
+// SPDX-FileType: Source
+// SPDX-FileCopyrightText: 2026 Edward Kmett <ekmett@gmail.com>
+// SPDX-License-Identifier: BSD-2-Clause OR Apache-2.0
+
+/** @file
+ * @brief Shared errors for hashing, serialization, and proof verification.
+ */
+module;
+#include <stdexcept>
+
+export module auth.error;
+
+namespace auth {
+
+/// @brief Reports malformed input, invalid proofs, or hashing failures.
+export struct auth_error : std::runtime_error {
+  using std::runtime_error::runtime_error;
+};
+
+} // namespace auth

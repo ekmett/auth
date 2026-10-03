@@ -1,0 +1,209 @@
+// SPDX-FileType: Source
+// SPDX-FileCopyrightText: 2026 Edward Kmett <ekmett@gmail.com>
+// SPDX-License-Identifier: BSD-2-Clause OR Apache-2.0
+
+/** @file
+ * @brief Checked binary serialization with one definition for reading and writing.
+ *
+ * The shared stream interface follows Glenn Fiedler's
+ * [Serialization Strategies](https://gafferongames.com/post/serialization_strategies/).
+ * A type describes its fields once; the stream supplies the direction and bounds
+ * checks. This implementation uses byte-aligned fields and exceptions for errors.
+ */
+module;
+#include <array>
+#include <concepts>
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <span>
+#include <type_traits>
+#include <utility>
+#include <variant>
+#include <vector>
+
+export module auth.serialization;
+export import auth.error;
+
+namespace auth {
+
+/// @brief An owned buffer of serialized bytes.
+export using bytes = std::vector<std::uint8_t>;
+
+template<class... Ts>
+using variant_tag = std::conditional_t<(sizeof...(Ts) <= 256), std::uint8_t, std::uint32_t>;
+
+/** @brief Appends deterministic, byte-aligned fields to an owned buffer.
+ * @note Custom serializers must preserve their input values when writing.
+ */
+export struct writer {
+  static constexpr bool reading = false; ///< Selects the writing path in serializers.
+  bytes data; ///< Serialized output in field order.
+
+  /** @brief Writes an unsigned integer in little-endian order.
+   * @param value Integer encoded in sizeof(T) bytes, or a bool encoded as one byte, 0 or 1.
+   */
+  template<std::unsigned_integral T>
+  void field(T value) {
+    if constexpr (std::same_as<T, bool>) {
+      data.push_back(value ? 1 : 0);
+    } else {
+      for (std::size_t i = 0; i < sizeof(T); ++i)
+        data.push_back(static_cast<std::uint8_t>(value >> (i * 8)));
+    }
+  }
+
+  /** @brief Writes each array element in order, without a length prefix.
+   * @param value Fixed-size array to encode.
+   */
+  template<class T, std::size_t N>
+  void field(const std::array<T, N>& value) {
+    for (const auto& x : value) field(x);
+  }
+
+  /** @brief Writes a variant's alternative index and active value.
+   * @param value Variant to encode; indices use one byte for up to 256 alternatives,
+   *              otherwise four little-endian bytes.
+   * @throws auth_error If the variant is valueless.
+   */
+  template<class... Ts>
+  void field(const std::variant<Ts...>& value) {
+    if (value.valueless_by_exception()) throw auth_error("valueless variant");
+    field(static_cast<variant_tag<Ts...>>(value.index()));
+    std::visit([this](const auto& x) { this->field(x); }, value);
+  }
+
+  /** @brief Writes a boxed value without pointer or presence bytes.
+   * @param value Non-null owning pointer used for recursive structure.
+   * @throws auth_error If the pointer is null. Use a variant for an empty alternative.
+   */
+  template<class T>
+  void field(const std::unique_ptr<T>& value) {
+    if (!value) throw auth_error("null boxed value");
+    field(*value);
+  }
+
+  /** @brief Invokes a custom type's serialize method through a const reference.
+   * @param value Value whose serializer writes its fields to this stream.
+   * @note A private serializer may grant friendship to writer.
+   */
+  template<class T> requires requires(const T& v, writer& s) { v.serialize(s); }
+  void field(const T& value) { value.serialize(*this); }
+
+  /** @brief Writes fields from left to right using the matching field overloads.
+   * @param values Fields to encode.
+   */
+  template<class... Ts>
+  void operator()(const Ts&... values) { (field(values), ...); }
+};
+
+/** @brief Reads checked fields from borrowed bytes, advancing a byte offset.
+ * @pre position is at most data.size().
+ * @note Input storage must remain valid and unchanged during reading. A failed
+ *       read may modify the cursor and destination; decode uses a local reader.
+ */
+export struct reader {
+  static constexpr bool reading = true; ///< Selects the reading path in serializers.
+  std::span<const std::uint8_t> data; ///< Borrowed input bytes.
+  std::size_t position = 0; ///< Offset of the next unread byte.
+
+  /** @brief Reads a little-endian unsigned integer, or a one-byte boolean.
+   * @param[out] value Decoded value.
+   * @throws auth_error If the input is truncated or a boolean is not 0 or 1.
+   */
+  template<std::unsigned_integral T>
+  void field(T& value) {
+    constexpr auto width = std::same_as<T, bool> ? 1 : sizeof(T);
+    if (data.size() - position < width) throw auth_error("truncated value");
+    if constexpr (std::same_as<T, bool>) {
+      const auto byte = data[position++];
+      if (byte > 1) throw auth_error("invalid boolean");
+      value = byte != 0;
+    } else {
+      value = 0;
+      for (std::size_t i = 0; i < sizeof(T); ++i)
+        value |= static_cast<T>(data[position++]) << (i * 8);
+    }
+  }
+
+  /** @brief Reads each array element in order; no length prefix is consumed.
+   * @param[out] value Fixed-size array to fill.
+   */
+  template<class T, std::size_t N>
+  void field(std::array<T, N>& value) {
+    for (auto& x : value) field(x);
+  }
+
+  /** @brief Reads a variant's index and constructs and fills its selected alternative.
+   * @param[out] value Variant whose alternatives must be default-constructible.
+   * @throws auth_error If the index is invalid or the encoding is malformed.
+   */
+  template<class... Ts>
+  void field(std::variant<Ts...>& value) {
+    variant_tag<Ts...> tag;
+    field(tag);
+    if (tag >= sizeof...(Ts)) throw auth_error("invalid variant index");
+    alternative(value, tag);
+  }
+
+  /** @brief Allocates and reads a boxed value, replacing the pointer on success.
+   * @param[out] value Owning pointer to a default-constructible payload.
+   */
+  template<class T>
+  void field(std::unique_ptr<T>& value) {
+    auto decoded = std::make_unique<T>();
+    field(*decoded);
+    value = std::move(decoded);
+  }
+
+  /** @brief Invokes a custom type's serialize method through a mutable reference.
+   * @param[in,out] value Value whose serializer reads its fields from this stream.
+   * @note A private serializer may grant friendship to reader.
+   */
+  template<class T> requires requires(T& v, reader& s) { v.serialize(s); }
+  void field(T& value) { value.serialize(*this); }
+
+  /** @brief Reads fields from left to right using the matching field overloads.
+   * @param[out] values Fields to decode.
+   */
+  template<class... Ts>
+  void operator()(Ts&... values) { (field(values), ...); }
+
+private:
+  template<std::size_t I = 0, class... Ts>
+  void alternative(std::variant<Ts...>& value, std::size_t tag) {
+    if (tag == I) field(value.template emplace<I>());
+    else if constexpr (I + 1 < sizeof...(Ts)) alternative<I + 1>(value, tag);
+  }
+};
+
+/** @brief Serializes a value to an owned byte buffer.
+ * @param value Value to encode, without modifying it.
+ * @return The bytes emitted by its fields or custom serialize method.
+ * @note Serialization and allocation exceptions propagate.
+ */
+export template<class T>
+bytes encode(const T& value) {
+  writer stream;
+  stream(value);
+  return std::move(stream.data);
+}
+
+/** @brief Decodes one value, leaving subsequent bytes for the caller.
+ * @tparam T Default-constructible, deserializable payload type.
+ * @param data Borrowed input bytes, possibly followed by more values.
+ * @return The value and a pointer immediately after its consumed bytes.
+ *         The pointer borrows data's storage; the caller retains the original end.
+ * @throws auth_error If a primitive field is truncated or malformed.
+ * @note Custom serializer and construction exceptions propagate. Trailing bytes
+ *       are permitted, and a zero-byte value returns the original starting pointer.
+ */
+export template<class T>
+std::pair<T, const std::uint8_t*> decode(std::span<const std::uint8_t> data) {
+  T value{};
+  reader stream{data};
+  stream(value);
+  return {std::move(value), data.subspan(stream.position).data()};
+}
+
+} // namespace auth

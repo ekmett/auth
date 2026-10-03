@@ -1,0 +1,34 @@
+// SPDX-FileType: Source
+// SPDX-FileCopyrightText: 2026 Edward Kmett <ekmett@gmail.com>
+// SPDX-License-Identifier: BSD-2-Clause OR Apache-2.0
+
+/** @file
+ * @brief SHA-256 digests for serialized byte sequences.
+ */
+module;
+#include <array>
+#include <cstdint>
+#include <span>
+#include <openssl/sha.h>
+
+export module auth.hash;
+export import auth.error;
+
+namespace auth {
+
+/// @brief The 32 bytes of a SHA-256 digest in hash output order.
+export using digest = std::array<std::uint8_t, 32>;
+
+/** @brief Hashes exactly the supplied bytes with OpenSSL's SHA-256 implementation.
+ * @param data Input bytes; an empty span is valid.
+ * @return The SHA-256 digest.
+ * @throws auth_error If OpenSSL reports failure.
+ */
+export inline digest sha256(std::span<const std::uint8_t> data) {
+  digest result;
+  if (!SHA256(data.data(), data.size(), result.data()))
+    throw auth_error("SHA-256 failed");
+  return result;
+}
+
+} // namespace auth
