@@ -120,20 +120,14 @@ void serialization_checks() {
   rejects([&] { (void)encode(std::unique_ptr<std::uint32_t>{}); });
 }
 
-struct tip {
-  std::uint32_t value = 0;
-  template<class Self, class Stream>
-  void serialize(this Self& self, Stream& s) { s(self.value); }
-};
-
 template<db DB> struct bin;
 
 template<db DB>
 struct tree {
   // The box makes the recursive variant finite.
-  std::variant<tip, std::unique_ptr<bin<DB>>> value;
+  std::variant<std::uint32_t, std::unique_ptr<bin<DB>>> value;
   tree() = default;
-  tree(tip leaf) : value(leaf) {}
+  tree(std::uint32_t leaf) : value(leaf) {}
   tree(bin<DB> node) : value(std::make_unique<bin<DB>>(std::move(node))) {}
   template<class Self, class Stream>
   void serialize(this Self& self, Stream& s) { s(self.value); }
@@ -164,12 +158,12 @@ std::optional<std::uint32_t> at(DB& db, sealed<DB, tree<DB>> root,
     if (!fork) return {};
     node = db.unseal(std::move(d == left ? (*fork)->left : (*fork)->right));
   }
-  if (auto leaf = std::get_if<tip>(&node.value)) return leaf->value;
+  if (auto leaf = std::get_if<std::uint32_t>(&node.value)) return *leaf;
   return {};
 }
 
 std::optional<std::uint32_t> go(db auto& db) {
-  auto root = db.seal(tree{bin(db, bin(db, tip(1), tip(2)), tip(3))});
+  auto root = db.seal(tree{bin(db, bin(db, 1, 2), 3)});
   return at(db, std::move(root), {left, right});
 }
 

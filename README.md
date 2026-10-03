@@ -38,8 +38,9 @@ it. The proof buffer must outlive its verifier and remain unchanged during repla
 
 ## Walking a sealed tree
 
-Build a tree with `bin` and `tip`, then follow a path through its sealed children.
-A `std::variant` distinguishes tips from bins. Each bin seals its two children:
+Build a tree with `bin` and integer leaves, then follow a path through its sealed
+children. A `std::variant` distinguishes leaves from bins. Each bin seals its two
+children:
 
 ```cpp
 #include <cstdint>
@@ -52,20 +53,14 @@ import auth;
 import auth.serialization;
 using namespace auth;
 
-struct tip {
-  std::uint32_t value = 0;
-  template<class Self, class Stream>
-  void serialize(this Self& self, Stream& s) { s(self.value); }
-};
-
 template<db DB> struct bin;
 
 template<db DB>
 struct tree {
   // The box makes the recursive variant finite.
-  std::variant<tip, std::unique_ptr<bin<DB>>> value;
+  std::variant<std::uint32_t, std::unique_ptr<bin<DB>>> value;
   tree() = default;
-  tree(tip leaf) : value(leaf) {}
+  tree(std::uint32_t leaf) : value(leaf) {}
   tree(bin<DB> node) : value(std::make_unique<bin<DB>>(std::move(node))) {}
   template<class Self, class Stream>
   void serialize(this Self& self, Stream& s) { s(self.value); }
@@ -96,13 +91,13 @@ std::optional<std::uint32_t> at(DB& db, sealed<DB, tree<DB>> root,
     if (!fork) return {};
     node = db.unseal(std::move(d == left ? (*fork)->left : (*fork)->right));
   }
-  if (auto leaf = std::get_if<tip>(&node.value)) return leaf->value;
+  if (auto leaf = std::get_if<std::uint32_t>(&node.value)) return *leaf;
   return {};
 }
 
 int main() {
   prover p;
-  auto root = p.seal(tree{bin(p, bin(p, tip(1), tip(2)), tip(3))});
+  auto root = p.seal(tree{bin(p, bin(p, 1, 2), 3)});
   const auto expected_root = encode(root); // Just the root's digest.
   auto answer = at(p, std::move(root), {left, right});
 
