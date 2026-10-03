@@ -1,0 +1,260 @@
+module;
+#include <array>
+#include <concepts>
+#include <compare>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <type_traits>
+#include <utility>
+#include <vector>
+#include <openssl/sha.h>
+
+export module auth;
+
+export namespace authenticated {
+
+using bytes = std::vector<std::uint8_t>;
+using digest = std::array<std::uint8_t, 32>;
+
+struct auth_error : std::runtime_error {
+  using std::runtime_error::runtime_error;
+};
+
+struct writer {
+  static constexpr bool reading = false;
+  bytes data;
+
+  template<std::unsigned_integral T>
+  void field(T value) {
+    if constexpr (std::same_as<T, bool>) {
+      data.push_back(value ? 1 : 0);
+    } else {
+      for (std::size_t i = 0; i < sizeof(T); ++i)
+        data.push_back(static_cast<std::uint8_t>(value >> (i * 8)));
+    }
+  }
+
+  template<class T, std::size_t N>
+  void field(const std::array<T, N>& value) {
+    for (const auto& x : value) field(x);
+  }
+
+  template<class T> requires requires(const T& v, writer& s) { v.serialize(s); }
+  void field(const T& value) { value.serialize(*this); }
+
+  template<class... Ts>
+  void operator()(const Ts&... values) { (field(values), ...); }
+};
+
+struct reader {
+  static constexpr bool reading = true;
+  std::span<const std::uint8_t> data;
+  std::size_t position = 0;
+
+  template<std::unsigned_integral T>
+  void field(T& value) {
+    constexpr auto width = std::same_as<T, bool> ? 1 : sizeof(T);
+    if (data.size() - position < width) throw auth_error("truncated value");
+    if constexpr (std::same_as<T, bool>) {
+      const auto byte = data[position++];
+      if (byte > 1) throw auth_error("invalid boolean");
+      value = byte != 0;
+    } else {
+      value = 0;
+      for (std::size_t i = 0; i < sizeof(T); ++i)
+        value |= static_cast<T>(data[position++]) << (i * 8);
+    }
+  }
+
+  template<class T, std::size_t N>
+  void field(std::array<T, N>& value) {
+    for (auto& x : value) field(x);
+  }
+
+  template<class T> requires requires(T& v, reader& s) { v.serialize(s); }
+  void field(T& value) { value.serialize(*this); }
+
+  template<class... Ts>
+  void operator()(Ts&... values) { (field(values), ...); }
+};
+
+template<class T>
+bytes encode(const T& value) {
+  writer stream;
+  stream(value);
+  return std::move(stream.data);
+}
+
+template<class T>
+T decode(std::span<const std::uint8_t> data) {
+  T value{};
+  reader stream{data};
+  stream(value);
+  if (stream.position != data.size()) throw auth_error("trailing bytes");
+  return value;
+}
+
+inline digest sha256(std::span<const std::uint8_t> data) {
+  digest result;
+  if (!SHA256(data.data(), data.size(), result.data()))
+    throw auth_error("SHA-256 failed");
+  return result;
+}
+
+struct prover;
+struct verifier;
+
+template<class T>
+class proof {
+  std::optional<T> value_;
+  digest hash_{};
+
+  proof(std::optional<T> value, digest hash)
+    : value_(std::move(value)), hash_(hash) {}
+  friend struct prover;
+  friend struct verifier;
+
+public:
+  proof() = default;
+  proof(const proof&) = delete;
+  proof& operator=(const proof&) = delete;
+  proof(proof&& other) noexcept(std::is_nothrow_move_constructible_v<T>)
+    : value_(std::move(other.value_)), hash_(other.hash_) { other.value_.reset(); }
+  proof& operator=(proof&& other)
+    noexcept(std::is_nothrow_move_constructible_v<T> && std::is_nothrow_move_assignable_v<T>) {
+    if (this != &other) {
+      value_ = std::move(other.value_);
+      hash_ = other.hash_;
+      other.value_.reset();
+    }
+    return *this;
+  }
+
+  bool operator==(const proof& other) const { return hash_ == other.hash_; }
+  auto operator<=>(const proof& other) const { return hash_ <=> other.hash_; }
+
+  template<class Self, class Stream>
+  void serialize(this Self& self, Stream& stream) {
+    if constexpr (Stream::reading) self.value_.reset();
+    stream(self.hash_);
+  }
+};
+
+namespace detail {
+enum class mode { prove, verify };
+
+class db_base {
+  explicit db_base(mode kind) : kind(kind) {}
+  friend struct authenticated::prover;
+  friend struct authenticated::verifier;
+public:
+  const mode kind;
+  db_base(const db_base&) = delete;
+  db_base& operator=(const db_base&) = delete;
+};
+
+// All participating code must use -DAUTH_CONTEXT_X28 -ffixed-x28.
+// Bind a scope at every ABI entry, including callbacks and thread entry.
+#if defined(AUTH_CONTEXT_X28)
+#if !defined(__aarch64__)
+#error "AUTH_CONTEXT_X28 requires AArch64"
+#endif
+register db_base* active_db asm("x28");
+#else
+inline thread_local db_base* active_db = nullptr;
+#endif
+
+template<class Db>
+Db& current() {
+  auto* db = active_db;
+  if (!db || db->kind != Db::kind) throw auth_error("missing or wrong database context");
+  return *static_cast<Db*>(db);
+}
+} // namespace detail
+
+struct prover final : detail::db_base {
+  static constexpr auto kind = detail::mode::prove;
+  std::vector<bytes> tape;
+
+  prover() : db_base(kind) {}
+
+  template<class T>
+  static proof<T> auth(T value) {
+    (void)detail::current<prover>();
+    auto hash = sha256(encode(value));
+    return {std::optional<T>(std::move(value)), hash};
+  }
+
+  template<class T>
+  static T unauth(proof<T> p) {
+    auto& db = detail::current<prover>();
+    if (!p.value_) throw auth_error("proof has no resident value");
+    db.tape.push_back(encode(*p.value_));
+    return std::move(*p.value_);
+  }
+};
+
+struct verifier final : detail::db_base {
+  static constexpr auto kind = detail::mode::verify;
+
+  // The transcript must outlive this verifier and stay unchanged during replay.
+  explicit verifier(const std::vector<bytes>& tape) : db_base(kind), tape_(tape) {}
+  verifier(std::vector<bytes>&&) = delete;
+
+  template<class T>
+  static proof<T> auth(T value) {
+    (void)detail::current<verifier>();
+    return {std::nullopt, sha256(encode(value))};
+  }
+
+  template<class T>
+  static T unauth(proof<T> p) {
+    auto& db = detail::current<verifier>();
+    if (db.position_ == db.tape_.size()) throw auth_error("proof tape exhausted");
+    const auto& frame = db.tape_[db.position_];
+    if (sha256(frame) != p.hash_) throw auth_error("proof hash mismatch");
+    auto value = decode<T>(frame);
+    if constexpr (std::is_nothrow_move_constructible_v<T>) {
+      ++db.position_;
+      return value;
+    } else {
+      // Return construction precedes local destruction; commit only on success.
+      struct advance_on_success {
+        std::size_t& position;
+        int exceptions = std::uncaught_exceptions();
+        ~advance_on_success() {
+          if (std::uncaught_exceptions() == exceptions) ++position;
+        }
+      } advance{db.position_};
+      return value;
+    }
+  }
+
+  void finish() const {
+    if (position_ != tape_.size()) throw auth_error("unused proof tape entries");
+  }
+
+private:
+  std::span<const bytes> tape_;
+  std::size_t position_ = 0;
+};
+
+class db_scope {
+  detail::db_base* previous_;
+public:
+  // A default scope establishes a known empty context at an ABI boundary.
+  db_scope() noexcept : previous_(detail::active_db) { detail::active_db = nullptr; }
+
+  template<class Db> requires (std::same_as<Db, prover> || std::same_as<Db, verifier>)
+  explicit db_scope(Db& db) noexcept : previous_(detail::active_db) { detail::active_db = &db; }
+
+  ~db_scope() { detail::active_db = previous_; }
+  db_scope(const db_scope&) = delete;
+  db_scope& operator=(const db_scope&) = delete;
+};
+
+} // namespace authenticated
