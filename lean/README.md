@@ -20,6 +20,11 @@ and audits the axioms used by twenty definitions and theorems. It writes the
 commands, exit codes, axiom output and source hashes to `lean/verification.txt`.
 The toolchain is pinned in `lean-toolchain`; no Mathlib dependency is needed.
 
+The separate Lean CI workflow runs for changes under `lean/` or to its workflow,
+and can also be started manually. It caches Elan and the pinned toolchain while
+rechecking the proofs from scratch, and retains `verification.txt` as an artifact.
+Lean-only changes do not run the C++ and documentation workflow.
+
 ## Codecs
 
 `AuthCodec.lean` makes the prefix law explicit:
