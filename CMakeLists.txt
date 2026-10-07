@@ -18,19 +18,19 @@ add_library(auth STATIC)
 add_library(auth::auth ALIAS auth)
 target_compile_features(auth PUBLIC cxx_std_26)
 target_sources(auth PUBLIC
-  FILE_SET modules TYPE CXX_MODULES FILES
-    error.ccm hash.ccm serialization.ccm auth.ccm)
+  FILE_SET modules TYPE CXX_MODULES BASE_DIRS src FILES
+    src/auth/error.ccm src/auth/hash.ccm src/auth/serialization.ccm src/auth.ccm)
 target_link_libraries(auth PRIVATE OpenSSL::Crypto)
 
 if(AUTH_BUILD_TESTS)
   enable_testing()
   foreach(test IN ITEMS auth-test auth-api-test)
-    add_executable(${test} ${test}.cc)
+    add_executable(${test} t/${test}.cc)
     target_link_libraries(${test} PRIVATE auth::auth)
     add_test(NAME ${test} COMMAND ${test})
   endforeach()
   if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-    add_executable(auth-no-elision-test auth-test.cc)
+    add_executable(auth-no-elision-test t/auth-test.cc)
     target_link_libraries(auth-no-elision-test PRIVATE auth::auth)
     target_compile_options(auth-no-elision-test PRIVATE -fno-elide-constructors)
     target_compile_definitions(auth-no-elision-test PRIVATE AUTH_TEST_NO_ELISION)

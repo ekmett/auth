@@ -112,11 +112,11 @@ The model was checked against `b21de16ac0a69177b6ebd9adba833c25b60c0dee`.
 
 | Implementation | Model |
 |---|---|
-| [`encode`/`decode` and field order](../serialization.ccm) | Codec prefix and partition laws |
-| [`prover::sealed`, `seal`](../auth.ccm) | Resident coherence, digest-only erasure and seal correspondence |
-| [`prover::unseal`](../auth.ccm) | Successful transcript append order |
-| [`verifier::unseal`](../auth.ccm) | Local checked decode, then transactional cursor commit |
-| [`verifier::finish`](../auth.ccm) | Byte exhaustion |
+| [`encode`/`decode` and field order](../src/auth/serialization.ccm) | Codec prefix and partition laws |
+| [`prover::sealed`, `seal`](../src/auth.ccm) | Resident coherence, digest-only erasure and seal correspondence |
+| [`prover::unseal`](../src/auth.ccm) | Successful transcript append order |
+| [`verifier::unseal`](../src/auth.ccm) | Local checked decode, then transactional cursor commit |
+| [`verifier::finish`](../src/auth.ccm) | Byte exhaustion |
 
 The proofs establish the model's laws. They are not an automatic translation or
 an end-to-end verification of the C++ implementation. `Check.lean` lists the

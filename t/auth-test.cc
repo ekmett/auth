@@ -22,7 +22,7 @@ import auth;
 import auth.hash;
 import auth.serialization;
 
-// Build from this directory (Homebrew LLVM and OpenSSL):
+// Build from the repository root (Homebrew LLVM and OpenSSL):
 // CXX=/opt/homebrew/opt/llvm/bin/clang++
 // SSL=/opt/homebrew/opt/openssl@3
 // OUT=$(mktemp -d)
@@ -30,15 +30,15 @@ import auth.serialization;
 // For release checks, append -DNDEBUG. In zsh use an array for FLAGS or run in bash.
 // To force the throwing-return regression, append
 // -fno-elide-constructors -DAUTH_TEST_NO_ELISION to FLAGS.
-// $CXX $FLAGS --precompile error.ccm -o $OUT/auth.error.pcm
+// $CXX $FLAGS --precompile src/auth/error.ccm -o $OUT/auth.error.pcm
 // $CXX $FLAGS -fprebuilt-module-path=$OUT -I$SSL/include \
-//   --precompile hash.ccm -o $OUT/auth.hash.pcm
+//   --precompile src/auth/hash.ccm -o $OUT/auth.hash.pcm
 // $CXX $FLAGS -fprebuilt-module-path=$OUT \
-//   --precompile serialization.ccm -o $OUT/auth.serialization.pcm
+//   --precompile src/auth/serialization.ccm -o $OUT/auth.serialization.pcm
 // $CXX $FLAGS -fprebuilt-module-path=$OUT \
-//   --precompile auth.ccm -o $OUT/auth.pcm
+//   --precompile src/auth.ccm -o $OUT/auth.pcm
 // for TEST in auth-test auth-api-test; do
-//   $CXX $FLAGS -fprebuilt-module-path=$OUT $TEST.cc $OUT/*.pcm \
+//   $CXX $FLAGS -fprebuilt-module-path=$OUT t/$TEST.cc $OUT/*.pcm \
 //     -L$SSL/lib -Wl,-rpath,$SSL/lib -lcrypto -o $OUT/$TEST
 //   $OUT/$TEST
 // done

@@ -29,10 +29,10 @@ set(DOXYGEN_WARN_IF_UNDOCUMENTED YES)
 set(DOXYGEN_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/docs")
 set(DOXYGEN_WARN_LOGFILE "${PROJECT_BINARY_DIR}/docs/warnings.log")
 doxygen_add_docs(auth_docs
-  "${PROJECT_SOURCE_DIR}/auth.ccm"
-  "${PROJECT_SOURCE_DIR}/serialization.ccm"
-  "${PROJECT_SOURCE_DIR}/hash.ccm"
-  "${PROJECT_SOURCE_DIR}/error.ccm"
+  "${PROJECT_SOURCE_DIR}/src/auth.ccm"
+  "${PROJECT_SOURCE_DIR}/src/auth/serialization.ccm"
+  "${PROJECT_SOURCE_DIR}/src/auth/hash.ccm"
+  "${PROJECT_SOURCE_DIR}/src/auth/error.ccm"
   "${PROJECT_SOURCE_DIR}/README.md"
   "${PROJECT_SOURCE_DIR}/LICENSE.md"
   "${PROJECT_SOURCE_DIR}/CONTRIBUTING.md"
