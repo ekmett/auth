@@ -82,6 +82,40 @@ jobs:
           path: build/docs/html
           retention-days: 1
 
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Set up Visual Studio environment
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
+        with:
+          arch: x64
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja `
+            "-DCMAKE_CXX_COMPILER=C:/Program Files/LLVM/bin/clang-cl.exe" `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DAUTH_BUILD_TESTS=ON -DAUTH_BUILD_DOCS=OFF `
+            "-DOPENSSL_ROOT_DIR=$env:ProgramFiles/OpenSSL" `
+            "-DCMAKE_CXX_FLAGS=/W4 /WX /EHsc"
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Test
+        run: ctest --test-dir build --no-tests=error --output-on-failure
+      - name: Retain Windows diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-diagnostics
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            build/CMakeFiles/CMakeConfigureLog.yaml
+            build/Testing/Temporary/
+
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: build
