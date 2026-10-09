@@ -6,6 +6,23 @@ SPDX-FileCopyrightText: 2026 Edward Kmett <ekmett@gmail.com>
 SPDX-License-Identifier: BSD-2-Clause OR Apache-2.0
 -->
 
+<!-- badges:start -->
+[![build + docs](https://img.shields.io/github/actions/workflow/status/ekmett/auth/build.yml?branch=main&style=flat&label=build+%2B+docs&logo=githubactions&logoColor=white)](https://github.com/ekmett/auth/actions/workflows/build.yml?query=branch%3Amain)
+[![proofs](https://img.shields.io/github/actions/workflow/status/ekmett/auth/lean.yml?branch=main&style=flat&label=proofs&logo=githubactions&logoColor=white)](https://github.com/ekmett/auth/actions/workflows/lean.yml?query=branch%3Amain)
+[![issues](https://img.shields.io/github/issues/ekmett/auth?style=flat&label=issues&color=007ec6&logo=github&logoColor=white)](https://github.com/ekmett/auth/issues)
+[![commits](https://img.shields.io/github/commit-activity/w/ekmett/auth?style=flat&label=commits&color=007ec6&logo=github&logoColor=white)](https://github.com/ekmett/auth/activity)
+
+[![CMake: 3.30+](https://img.shields.io/static/v1?label=CMake&message=3.30%2B&color=064F8C&style=flat&logo=cmake&logoColor=white)](CMakeLists.txt)
+[![C++: 26](https://img.shields.io/static/v1?label=C%2B%2B&message=26&color=00599C&style=flat&logo=cplusplus&logoColor=white)](README.md)
+[![Clang: 21](https://img.shields.io/static/v1?label=Clang&message=21&color=6f42c1&style=flat&logo=llvm&logoColor=white)](README.md)
+[![Lean: 4.24.0](assets/badges/lean-version.svg)](lean/lean-toolchain)
+
+[![license: BSD-2-Clause OR Apache-2.0](assets/badges/license.svg)](LICENSE.md)
+[![Contributor Covenant: 2.0](https://img.shields.io/static/v1?label=Contributor+Covenant&message=2.0&color=007ec6&style=flat&logo=contributorcovenant&logoColor=white)](CODE_OF_CONDUCT.md)
+
+[![docs: read](https://img.shields.io/static/v1?label=docs&message=read&color=007ec6&style=flat)](https://ekmett.github.io/auth/)
+<!-- badges:end -->
+
 C++26 authenticated computation. Run the same algorithm with a prover to produce
 a proof and with a verifier to check it. Pass the db by reference:
 
