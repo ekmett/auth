@@ -100,7 +100,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release `
             -DAUTH_BUILD_TESTS=ON -DAUTH_BUILD_DOCS=OFF `
             "-DOPENSSL_ROOT_DIR=$env:ProgramFiles/OpenSSL" `
-            "-DCMAKE_CXX_FLAGS=/W4 /WX /EHsc"
+            "-DCMAKE_CXX_FLAGS=/W4 /WX /EHsc /clang:-Wno-unused-command-line-argument"
       - name: Build
         run: cmake --build build --parallel
       - name: Test
